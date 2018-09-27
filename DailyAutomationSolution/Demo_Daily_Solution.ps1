@@ -12,7 +12,11 @@ param(
 
     [string]$AutomationRunbookName = "Runbook-Daily" +  -join ((48..57) * 100 | Get-Random -Count 6 | %{[char]$_}),
 
-    [string]$AutomationScheduleName = "Each day"
+    [string]$AutomationScheduleName = "Each day",
+
+    [string]$DailyResourceGroupName = "DEMO_DAILY",
+
+    [string]$DailyLocation = 'WestEurope'
 )
 
 # If not already in Azure Environment we connect to it (graphical interface is then needed)
@@ -43,6 +47,7 @@ New-AzureRmAutomationSchedule -AutomationAccountName $AutomationAccountName -Nam
 
 # Link the runbook to the schedule
 $RunbookParameters = @{
-    ResourceGroupName = 'DEMO_DAILY'
+    ResourceGroupName = $DailyResourceGroupName
+    Location = $DailyLocation
 }
 Register-AzureRmAutomationScheduledRunbook -AutomationAccountName $AutomationAccountName -Name $AutomationRunbookName -ScheduleName $AutomationScheduleName -ResourceGroupName $ResourceGroupName -Parameters $RunbookParameters

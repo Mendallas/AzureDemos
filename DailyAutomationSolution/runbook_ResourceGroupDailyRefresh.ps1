@@ -10,7 +10,10 @@
 [CmdletBinding()]
 Param(
    [Parameter(Mandatory=$True)]
-   [string]$ResourceGroupName
+   [string]$ResourceGroupName,
+
+   [Parameter(Mandatory=$True)]
+   [string]$Location
 )
 
 $connectionName = "AzureRunAsConnection"
@@ -48,4 +51,4 @@ if($AzureResourceGroup)
         write-error "Not able to delete the Group"
     }
 }
-New-AzureRmResourceGroup -name $ResourceGroupName -Location 'WestEurope'
+New-AzureRmResourceGroup -name $ResourceGroupName -Location $Location
