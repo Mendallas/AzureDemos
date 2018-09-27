@@ -1,40 +1,29 @@
 #requires -RunAsAdministrator
 param(
-    [ValidateNotNullOrEmpty()]
     [string]$ResourceGroupName = 'ADMIN_DAILY',
 
-    [ValidateNotNullOrEmpty()]
     [string]$Location = 'WestEurope',
-    
-    [ValidateNotNullOrEmpty()]
-    [string]$RunbookURL = 'https://raw.githubusercontent.com/Mendallas/AzureDemos/master/DailyAutomationSolution/Sources/runbook_ResourceGroupDailyRefresh.ps1',
 
-    [ValidateNotNullOrEmpty()]
-    [string]$AutomationAccountName = 'SubscriptionAutomation',
+    [string]$AutomationAccountName = 'Automation-Daily' + -join ((48..57) * 100 | Get-Random -Count 6 | %{[char]$_}),
 
-    [ValidateNotNullOrEmpty()]
-    [string]$AutomationConnectionName = "test",
+    [string]$ApplicationDisplayName = "Admin-Daily" +  -join ((48..57) * 100 | Get-Random -Count 6 | %{[char]$_}),
 
-    [ValidateNotNullOrEmpty()]
-    [string]$KeyVaultName = "kv89232390"
+    [string]$SelfSignedCertPlainPassword = -join ((33..126) * 100 | Get-Random -Count 32 | % {[char]$_}),
+
+    [string]$AutomationRunbookName = "Runbook-Daily" +  -join ((48..57) * 100 | Get-Random -Count 6 | %{[char]$_}),
+
+    [string]$AutomationScheduleName = "Each day"
 )
-
-function Check-AzurePrerequisites{
-    $AzureContext = Get-AzureRmContext
-    if(-not $AzureContext.Environment) {
-        Connect-AzureRmAccount
-        Get-AzureRmSubscription
-        $SubName = Read-Host "Subscription Name"
-        Select-AzureRmSubscription $SubName
-    }
-}
-
-function CustomImport-AzureRmAutomationRunbook{
-}
 
 # If not already in Azure Environment we connect to it (graphical interface is then needed)
 # Please note that if you are using Visual Studio Code the Authent windows will be on the foreground https://github.com/Microsoft/vscode/issues/42356
-Check-AzurePrerequisites
+$AzureContext = Get-AzureRmContext
+if(-not $AzureContext.Environment) {
+    Connect-AzureRmAccount
+    Get-AzureRmSubscription
+    $SubName = Read-Host "Subscription Name"
+    Select-AzureRmSubscription $SubName
+}
 
 # New Resource Group
 New-AzureRmResourceGroup -name $ResourceGroupName -Location $location
@@ -42,16 +31,18 @@ New-AzureRmResourceGroup -name $ResourceGroupName -Location $location
 # New Azure Automation Account
 New-AzureRmAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName -Location $Location
 
-# new Azure Automation Run as Account 
-./New-RunAsAccount.ps1 -ResourceGroup $ResourceGroupName -AutomationAccountName $AutomationAccountName -SubscriptionId (Get-AzureRmContext).Subscription.Id -ApplicationDisplayName "fjsdjflsdfjlksdf" -SelfSignedCertPlainPassword "msjfklsdjflksjdfl2030123¨!!?" -CreateClassicRunAsAccount $false
+# New Azure Automation Run as Account 
+./New-RunAsAccount.ps1 -ResourceGroup $ResourceGroupName -AutomationAccountName $AutomationAccountName -SubscriptionId (Get-AzureRmContext).Subscription.Id -ApplicationDisplayName $ApplicationDisplayName -SelfSignedCertPlainPassword $SelfSignedCertPlainPassword -CreateClassicRunAsAccount $false
 
-# $SubscriptionID = (Get-AzureRmContext).Subscription.Id
-# $FieldValues = @{"AutomationCertificateName"="ContosoCertificate";"SubscriptionID"=$SubscriptionID}
-# New-AzureRmAutomationConnection -Name $AutomationConnectionName -ConnectionTypeName Azure -ConnectionFieldValues $FieldValues -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName
+# New Azure Automation Runbook
+Import-AzureRmAutomationRunbook -Name $AutomationRunbookName -Path .\runbook_ResourceGroupDailyRefresh.ps1 -ResourceGroup $ResourceGroupName -AutomationAccountName $AutomationAccountName -Type PowerShell -Published 
 
-# I won't be using Import-AzureRmAutomationRunbook from the AzureRM module because it is not yet able to import from url, only drive path https://github.com/Azure/azure-powershell/issues/1640 
-# Import-AzureRmAutomationRunbook -Path $filepath -ResourceGroup $ResourceGroupName -AutomationAccountName $AutomationAccountName -Type PowerShell
-# However thanks to the Azure CmdLet being open source, we can easily recreate our own import function
-# https://github.com/Azure/azure-powershell/blob/preview/src/ResourceManager/Automation/Commands.Automation/Cmdlet/ImportAzureAutomationRunbook.cs
-# https://github.com/Azure/azure-powershell/blob/preview/src/ResourceManager/Automation/Commands.Automation/Common/AutomationClient.cs 
-CustomImport-AzureRmAutomationRunbook -Url $RunbookURL -ResourceGroup $ResourceGroupName -AutomationAccountName $AutomationAccountName -Type PowerShell
+# New Azure Automation Schedule
+$StartTime = (Get-Date "00:00:00").AddDays(1)
+New-AzureRmAutomationSchedule -AutomationAccountName $AutomationAccountName -Name $AutomationScheduleName -StartTime $StartTime -DayInterval 1 -ResourceGroupName $ResourceGroupName -TimeZone (Get-TimeZone).ID
+
+# Link the runbook to the schedule
+$RunbookParameters = @{
+    ResourceGroupName = 'DEMO_DAILY'
+}
+Register-AzureRmAutomationScheduledRunbook -AutomationAccountName $AutomationAccountName -Name $AutomationRunbookName -ScheduleName $AutomationScheduleName -ResourceGroupName $ResourceGroupName -Parameters $RunbookParameters
